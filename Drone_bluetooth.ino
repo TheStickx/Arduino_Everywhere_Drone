@@ -1,8 +1,11 @@
 #include <SoftwareSerial.h>
-SoftwareSerial BlueSerial(2, 3); // RX, TX
+SoftwareSerial BlueSerial(2, 3); // les pin à utiliser pour le bluetooth sont 2=RX, 3=TX
 
-unsigned long mesure, LastTime;
-int Vitesse, MotorVolant, MessageStep;
+//------------------------------------------------------------------------------------------
+//   Variables globales non commune à tout projet Arduino EveryWhere
+//
+unsigned long LastTime;
+int MotorVolant, MessageStep; 
 bool Avance;
 
 int PositionMessage;
@@ -26,13 +29,13 @@ char messageBLUE[20], MotorNo, CharTemp;
 #define PIN_Gauge 1
 unsigned long TimeMesureGauge;
 int ValGauge;
+//
+//   Fin des variables globales non commune à tout projet Arduino EveryWhere
+//---------------------------------------------------------------------------------
+
 
 void setup() {
   // put your setup code here, to run once:
-  MoteurSetup();
-  
-  // initialise le port USB  ( les 3 lignes ci dessous )
-  // BlueSerial.begin(9600);
 
   ChercheBlueBauds();
   sendCommand("AT");
@@ -50,6 +53,7 @@ void setup() {
   sendCommand("AT+PIN123456");  
   
   // quelques variables pour ce projet
+  MoteurSetup();
   Avance=false;
   LastTime = millis();
   MessageStep = 0;
@@ -69,9 +73,6 @@ void sendCommand(const char * command){
   }
   //end the string
   reply[i] = '\0';
-  // un jours peut être si on veut constater le retour blue tooth
-  //Serial.print(reply);
-  //Serial.println("Reply end");
 }
 void ChercheBlueBauds(){
 
@@ -98,54 +99,13 @@ bool TesteBauds( char mode, long bauds) {
   }
   else return false;
 }
-// messageBLUE[20]  PositionMessage   MotorNo
-//------------------------------------------
-void serialBLUE() {
-  while (BlueSerial.available()) {
-    // get the new byte:
-    CharTemp = (char)BlueSerial.read();
-        
-    if ( MessageStep >= 1 )
-    {
-      if ( MessageStep >= 2 )
-      {
-        if ( CharTemp == '>' )
-        {
-          // cette étape sert à signaler que le buffer est plein
-          MessageStep = 3;
-        }
-        else
-        {
-          // <<<etape 2>>> on remplis le buffer
-          messageBLUE[PositionMessage] = CharTemp;
-          PositionMessage++;            
-        }
-      }
-      else 
-      {
-        if ( CharTemp == ':' )
-        {
-          PositionMessage = 0;
-          MessageStep = 2;
-        }
-        else
-        {
-          // <<<etape 1>>> si c'est pas ':' c'est le n° de moteur
-          MotorNo = CharTemp;          
-        }
-      }
-    }
-    else
-    {
-      // <<<étape 0>>> on attends le caractere M
-      if ( CharTemp == 'M' )
-      {
-        MessageStep = 1;
-      }
-    }
-  }
-}
-//-------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// à partir d'ici, tout est spécifique au projet Drone_bluetooth
+// la partie commune à Arduino everywhere est au dessus.
+// utilisez l'objet "BlueSerial" pour dialoguer avec le PC distant.
+// les fonctions au dessus ne sont nécessaires qu'au démarage.
+
 
 void loop() 
 {  
@@ -194,6 +154,52 @@ void loop()
   serialBLUE();
 }
 
+void serialBLUE() {
+  while (BlueSerial.available()) {
+    // get the new byte:
+    CharTemp = (char)BlueSerial.read();
+        
+    if ( MessageStep >= 1 )
+    {
+      if ( MessageStep >= 2 )
+      {
+        if ( CharTemp == '>' )
+        {
+          // cette étape sert à signaler que le buffer est plein
+          MessageStep = 3;
+        }
+        else
+        {
+          // <<<etape 2>>> on remplis le buffer
+          messageBLUE[PositionMessage] = CharTemp;
+          PositionMessage++;            
+        }
+      }
+      else 
+      {
+        if ( CharTemp == ':' )
+        {
+          PositionMessage = 0;
+          MessageStep = 2;
+        }
+        else
+        {
+          // <<<etape 1>>> si c'est pas ':' c'est le n° de moteur
+          MotorNo = CharTemp;          
+        }
+      }
+    }
+    else
+    {
+      // <<<étape 0>>> on attends le caractere M
+      if ( CharTemp == 'M' )
+      {
+        MessageStep = 1;
+      }
+    }
+  }
+}
+//-------------------------------------------------------------
 
 
 int TheNumber;
