@@ -35,7 +35,7 @@ int ValGauge;
 
 
 void setup() {
-  // put your setup code here, to run once:
+  // la section ci dessous est nécessaire à Arduino EveryWhere
 
   ChercheBlueBauds();
   sendCommand("AT");
@@ -52,7 +52,9 @@ void setup() {
   sendCommand("AT+NAME");
   sendCommand("AT+PIN123456");  
   
-  // quelques variables pour ce projet
+  // Fin de ce qui est nécessaire à Arduino EveryWhere
+  //-----------------------------------------
+  // quelques variables pour ce projet précis non nécessaire à Arduino EveryWhere
   MoteurSetup();
   Avance=false;
   LastTime = millis();
