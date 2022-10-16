@@ -18,11 +18,10 @@ char messageBLUE[20], MotorNo, CharTemp;
 // gestion de la lumière
 #define PIN_LIGHT    9 // ces pins recoient un signal analogique
 
-#define VOLANT_CENTRE 469 // 512 //404 ma petite caisse / 447 valeur petit lacroix
-#define VOLANT_DROITE 244 // 0 //200 ma petite caisse / 222 valeur petit lacroix 250
-#define VOLANT_GAUCHE 725 // 1023 //661 ma petite caisse / 676 valeur petit lacroix 611
+#define VOLANT_CENTRE 444 // voiturenoire 600 // voiture rouge 700 //bull jaune 444 // 512 //404 ma petite caisse / 447 valeur petit lacroix
+#define VOLANT_DROITE 180 // voiturenoire 10 // voiture rouge 135 //bull jaune 180 // 0 //200 ma petite caisse / 222 valeur petit lacroix 250
+#define VOLANT_GAUCHE 746 // voiturenoire 1023 // voiture rouge 1023 //bull jaune 746 // 1023 //661 ma petite caisse / 676 valeur petit lacroix 611
 #define VOLANT_JEUX 15 //20 valeur petit lacroix
-#define Proportionel_VOLANT 5.23 // pour rendre le volant + ou moin réactif
 
 //-----------
 // gauge
@@ -48,13 +47,14 @@ void setup() {
   sendCommand("AT+CHAR");
   sendCommand("AT+CHAR0xFFE1");
   sendCommand("AT+CHAR");
-  sendCommand("AT+NAMEbluino");
+  sendCommand("AT+NAMEAvion"); //BullJaune  VoitureRouge
   sendCommand("AT+NAME");
   sendCommand("AT+PIN123456");  
   
   // Fin de ce qui est nécessaire à Arduino EveryWhere
   //-----------------------------------------
   // quelques variables pour ce projet précis non nécessaire à Arduino EveryWhere
+  Serial.begin(115200); // pour dialogue serie
   MoteurSetup();
   Avance=false;
   LastTime = millis();
@@ -123,7 +123,9 @@ void loop()
       MotorVolant = 2*MotorVolant;
       
       MotorVolant = MotorVolant-254;
-      
+      Serial.print("\nMot :1 Vit :"); // pour dialogue serie
+      Serial.println(MotorVolant); // pour dialogue serie
+  
       MoteurVitesse ( MotorVolant);
     } 
     // M2:7F>   M1:7F>
@@ -136,6 +138,8 @@ void loop()
 
       MotorVolant = MotorVolant + VOLANT_DROITE ;
 
+      Serial.print("\nMot :2 Vit :"); // pour dialogue serie
+      Serial.println(MotorVolant); // pour dialogue serie
       ChangeLaConsigne ( MotorVolant );
     }
 
@@ -144,6 +148,9 @@ void loop()
     {
       MotorVolant = ( 16 * ParseHex(messageBLUE[0])) + ParseHex(messageBLUE[1]);
 
+      Serial.print("\nMot :3 Vit :"); // pour dialogue serie
+      Serial.println(MotorVolant); // pour dialogue serie
+      
       analogWrite(PIN_LIGHT, 255 - MotorVolant );  // j'inverse la puissance 
                                       // car le transistor inverse la tension
     } 
@@ -160,6 +167,7 @@ void serialBLUE() {
   while (BlueSerial.available()) {
     // get the new byte:
     CharTemp = (char)BlueSerial.read();
+    Serial.write(CharTemp); // pour dialogue serie
         
     if ( MessageStep >= 1 )
     {
@@ -169,6 +177,7 @@ void serialBLUE() {
         {
           // cette étape sert à signaler que le buffer est plein
           MessageStep = 3;
+          return;
         }
         else
         {
@@ -236,9 +245,7 @@ int ParseHex ( char TheHexCode )
 //
 //  Fonctions pour les moteurs
 //
-
-int ConsignePourVolant, DifferenceConsigneMesure;
-float PuissanceVolant;
+float PuissanceVolant, ConsignePourVolant;
 
 //--------------------------------------------------------------------------------------
 //  initialise les moteurs
@@ -291,8 +298,99 @@ void MoteurStop()
 //  Fonctions pour le Moteur Qui Gere le Volant
 //
 // Cette fonction doit être appellé très souvent    Proportionel_VOLANT PuissanceVolant
+float proportional = 10.000;    //initial value
+#define   MOTOR_LEVEL_NOISY   40.0 
 
 void GestionDuMoteurVolant()
+{   
+  float error = (float)analogRead(A0);
+  error = error - ConsignePourVolant; 
+  
+  float pTerm_motor_R = proportional * error;
+  
+  PuissanceVolant = constrain((pTerm_motor_R ), -255, 255);
+  
+  
+  if (PuissanceVolant > 0)
+  {   
+    // si trop à gauche, tourne à droite
+      digitalWrite(PIN_VOLANT_G, LOW);
+      if (PuissanceVolant<MOTOR_LEVEL_NOISY)PuissanceVolant=0;
+      analogWrite(PIN_VOLANT_D, (int)PuissanceVolant );
+  }
+  else
+  {
+    // si trop à droite, tourne à gauche
+    digitalWrite(PIN_VOLANT_G, HIGH);
+    if (PuissanceVolant>-MOTOR_LEVEL_NOISY)PuissanceVolant=0;    
+    analogWrite(PIN_VOLANT_D, 255+(int)PuissanceVolant );
+  }
+}
+
+/*
+#define   GUARD_MOTOR_GAIN   255.0     
+
+float K_motor_    = 1;
+float proportional = 10.000;    //initial value
+float integral   = 0.0; //1.000;
+float derivative   = 0.0; //1.500;
+float integrated_motor_error = 0;
+float mean_dTerm_motor_R = 0;
+float last_motor_error    = 0;
+int timeout=0;
+
+void GestionDuMoteurVolant()
+{   
+  float error = (float)analogRead(A0);
+  error = error - ConsignePourVolant; 
+  
+  float pTerm_motor_R = proportional * error;
+  
+  integrated_motor_error = constrain(integrated_motor_error + error, -GUARD_MOTOR_GAIN, GUARD_MOTOR_GAIN);                                   
+  float iTerm_motor_R =  integral * integrated_motor_error;
+
+  mean_dTerm_motor_R = (mean_dTerm_motor_R * 49 +(error - last_motor_error))/50 ;
+  float dTerm_motor_R = derivative * mean_dTerm_motor_R;                            
+  last_motor_error = error;
+  PuissanceVolant = constrain(K_motor_*(pTerm_motor_R + iTerm_motor_R + dTerm_motor_R), -255, 255);
+  
+  //BlueSerial.print(" pow ");
+  if (timeout>100)
+  {
+    timeout=0;
+    */
+    /*BlueSerial.print(ConsignePourVolant,1);
+    BlueSerial.print(" err ");
+    BlueSerial.print(error,1);*/ /*
+    BlueSerial.print(" p ");
+    BlueSerial.println(pTerm_motor_R,0);
+    BlueSerial.print(" i ");
+    BlueSerial.println(iTerm_motor_R,0);
+    BlueSerial.print(" d ");
+    BlueSerial.println(dTerm_motor_R,3);
+  }
+  timeout++;
+  //delay(1000);
+    
+  
+  if (PuissanceVolant > 0)
+  {   
+    // si trop à gauche, tourne à droite
+      digitalWrite(PIN_VOLANT_G, LOW);
+    
+      analogWrite(PIN_VOLANT_D, (int)PuissanceVolant );
+  }
+  else
+  {
+    // si trop à droite, tourne à gauche
+    digitalWrite(PIN_VOLANT_G, HIGH);
+    
+    analogWrite(PIN_VOLANT_D, 255+(int)PuissanceVolant );
+  }
+}*/
+/* 
+int DifferenceConsigneMesure;
+void GestionDuMoteurVolantOld()
 {   
   DifferenceConsigneMesure = analogRead(A0) - ConsignePourVolant;
   
@@ -324,17 +422,16 @@ void GestionDuMoteurVolant()
     analogWrite(PIN_VOLANT_D, 255-DifferenceConsigneMesure );
   }
 }
+*/
 
 // cette fonction sert surtout si on veut tourner très précisément le volant
 void ChangeLaConsigne (int NouvelleConsigne)
 {  
-  // M2:7F>
-  
   // ne dépassons pas les limites
   if ( NouvelleConsigne > VOLANT_GAUCHE ) NouvelleConsigne = VOLANT_GAUCHE;
   if ( NouvelleConsigne < VOLANT_DROITE ) NouvelleConsigne = VOLANT_DROITE;  
   
-  ConsignePourVolant = NouvelleConsigne;
+  ConsignePourVolant = (float)NouvelleConsigne;
 
 }
 
@@ -355,10 +452,3 @@ void GestionGauge()
     BlueSerial.print(">");
   }
 }
-
-
-
-
-
-
-
